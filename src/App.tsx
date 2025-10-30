@@ -4,6 +4,7 @@ import type { Task, WeekData, TimeSlot, TaskTemplate } from './types'
 import { loadData, saveData, loadTemplates, saveTemplates, loadUnassignedTasks, saveUnassignedTasks } from './utils/storage'
 import Header from './components/Header'
 import TimelineView from './components/TimelineView'
+import MobileDayView from './components/MobileDayView'
 import UnassignedTasks from './components/UnassignedTasks'
 import TaskTemplateManager from './components/TaskTemplateManager'
 import BatchAddTasks from './components/BatchAddTasks'
@@ -12,6 +13,8 @@ import jsPDF from 'jspdf'
 
 export default function App() {
   const [weekOffset, setWeekOffset] = useState(0)
+  const [currentDayIndex, setCurrentDayIndex] = useState(0)
+  const [isMobileView, setIsMobileView] = useState(false)
   const [data, setData] = useState<Record<string, WeekData>>({})
   const [searchQuery, setSearchQuery] = useState('')
   const [templates, setTemplates] = useState<TaskTemplate[]>([])
@@ -31,6 +34,14 @@ export default function App() {
     setTemplates(savedTemplates)
     setUnassignedTasks(savedUnassignedTasks)
     setIsInitialized(true) // 标记已初始化
+    
+    // 检测移动端
+    const checkMobile = () => {
+      setIsMobileView(window.innerWidth < 1024)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   useEffect(() => {
@@ -555,13 +566,23 @@ export default function App() {
   // 获取当前日期，用于显示"今天"标识
   const today = new Date()
   const todayISO = toISODate(today)
+  
+  // 当切换周时，尝试定位到"今天"或第一天
+  useEffect(() => {
+    const todayIndex = weekData.days.findIndex(d => d.dateISO === todayISO)
+    if (todayIndex >= 0) {
+      setCurrentDayIndex(todayIndex)
+    } else {
+      setCurrentDayIndex(0)
+    }
+  }, [weekKey, todayISO, weekData.days])
 
   const completedCount = weekData.days.reduce((acc, d) => acc + d.tasks.filter(t => t.status === 'done').length, 0)
   const totalCount = weekData.days.reduce((acc, d) => acc + d.tasks.length, 0)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="mx-auto max-w-8xl p-6 space-y-6">
+      <div className="mx-auto max-w-8xl p-3 md:p-6 space-y-3 md:space-y-6">
         <Header
           weekNumber={weekNumber}
           rangeLabel={rangeLabel}
@@ -575,106 +596,101 @@ export default function App() {
           onShowBatchAdd={() => setShowBatchAdd(true)}
         />
         
-        {/* 图例和进度 */}
-        <div className="flex items-center justify-between bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📝</span>
-              <span>计划（按优先级蓝色深浅）</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">👥</span>
-              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">会议</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📚</span>
-              <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">课程</span>
-            </div>
-            <div className="border-l border-gray-300 pl-4 ml-2">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs">●</div>
-                  <span>未开始</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-yellow-500 flex items-center justify-center text-white text-xs">▲</div>
-                  <span>进行中</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
-                  <span>已完成</span>
+        {/* 图例和进度 - 桌面端显示完整，移动端简化 */}
+        <div className="bg-white rounded-lg shadow-sm p-3 md:p-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            {/* 图例 - 移动端隐藏 */}
+            <div className="hidden md:flex items-center gap-4 text-sm text-gray-600 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📝</span>
+                <span className="text-xs lg:text-sm">计划</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">👥</span>
+                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">会议</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📚</span>
+                <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">课程</span>
+              </div>
+              <div className="border-l border-gray-300 pl-4 ml-2">
+                <div className="flex items-center gap-2 lg:gap-4">
+                  <div className="flex items-center gap-1">
+                    <div className="h-3 w-3 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs">●</div>
+                    <span className="text-xs">待办</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="h-3 w-3 rounded-full bg-yellow-500 flex items-center justify-center text-white text-xs">▲</div>
+                    <span className="text-xs">进行中</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="h-3 w-3 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+                    <span className="text-xs">完成</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <div className="text-gray-600">本周进度</div>
-            <div className="bg-gray-200 rounded-full h-2 w-24">
-              <div 
-                className="bg-indigo-500 h-2 rounded-full transition-all duration-300" 
-                style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
-              ></div>
+            
+            {/* 进度 */}
+            <div className="flex items-center gap-3 text-sm">
+              <div className="text-gray-600 text-xs md:text-sm">本周进度</div>
+              <div className="bg-gray-200 rounded-full h-2 w-32 md:w-24">
+                <div 
+                  className="bg-indigo-500 h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+                ></div>
+              </div>
+              <div className="font-medium text-gray-800 text-sm">{completedCount}/{totalCount}</div>
             </div>
-            <div className="font-medium text-gray-800">{completedCount}/{totalCount}</div>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-8 gap-4 h-[calc(100vh-180px)] lg:h-[calc(100vh-160px)]">
-          {/* 未分配任务区域 - 移动端隐藏 */}
-          <div className="hidden lg:block lg:col-span-1">
-            <UnassignedTasks
-              tasks={unassignedTasks}
-              onAddTask={handleAddUnassignedTask}
-              onUpdateTask={handleUpdateUnassignedTask}
-              onDeleteTask={handleDeleteUnassignedTask}
-              onAssignTask={handleAssignTask}
+        {/* 移动端视图 */}
+        {isMobileView ? (
+          <div className="h-[calc(100vh-140px)]">
+            <MobileDayView
+              weekData={weekData}
+              currentDayIndex={currentDayIndex}
+              onAddTask={handleAddTask}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              onPrevDay={() => setCurrentDayIndex(i => Math.max(0, i - 1))}
+              onNextDay={() => setCurrentDayIndex(i => Math.min(weekData.days.length - 1, i + 1))}
+              searchQuery={searchQuery}
+              todayISO={todayISO}
             />
           </div>
-          
-          {/* 时间轴视图区域 */}
-          <div className="lg:col-span-7 col-span-1">
-            <div ref={exportRef} className="overflow-hidden h-full">
-              <TimelineView
-                weekData={weekData}
-                onAddTask={handleAddTask}
-                onUpdateTask={handleUpdateTask}
-                onDeleteTask={handleDeleteTask}
-                onMoveTask={handleMoveTask}
-                onReorderTasks={handleReorderTasks}
-                searchQuery={searchQuery}
-                todayISO={todayISO}
+        ) : (
+          /* 桌面端视图 */
+          <div className="grid grid-cols-1 lg:grid-cols-8 gap-4 h-[calc(100vh-180px)] lg:h-[calc(100vh-160px)]">
+            {/* 未分配任务区域 */}
+            <div className="hidden lg:block lg:col-span-1">
+              <UnassignedTasks
+                tasks={unassignedTasks}
+                onAddTask={handleAddUnassignedTask}
+                onUpdateTask={handleUpdateUnassignedTask}
+                onDeleteTask={handleDeleteUnassignedTask}
+                onAssignTask={handleAssignTask}
               />
             </div>
+            
+            {/* 时间轴视图区域 */}
+            <div className="lg:col-span-7 col-span-1">
+              <div ref={exportRef} className="overflow-hidden h-full">
+                <TimelineView
+                  weekData={weekData}
+                  onAddTask={handleAddTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={handleDeleteTask}
+                  onMoveTask={handleMoveTask}
+                  onReorderTasks={handleReorderTasks}
+                  searchQuery={searchQuery}
+                  todayISO={todayISO}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        )}
         
-        {/* 移动端浮动按钮 */}
-        <div className="lg:hidden fixed bottom-4 right-4 z-50">
-          <button
-            className="bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 transition-colors"
-            onClick={() => {
-              // 滚动到页面顶部显示未分配任务
-              const unassignedSection = document.getElementById('mobile-unassigned')
-              if (unassignedSection) {
-                unassignedSection.scrollIntoView({ behavior: 'smooth' })
-              }
-            }}
-            title="查看待安排任务"
-          >
-            📋
-          </button>
-        </div>
-        
-        {/* 移动端未分配任务区域 */}
-        <div id="mobile-unassigned" className="lg:hidden bg-white rounded-xl shadow-sm p-4 mb-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">📋 待安排任务</h3>
-          <UnassignedTasks
-            tasks={unassignedTasks}
-            onAddTask={handleAddUnassignedTask}
-            onUpdateTask={handleUpdateUnassignedTask}
-            onDeleteTask={handleDeleteUnassignedTask}
-            onAssignTask={handleAssignTask}
-          />
-        </div>
       </div>
       
       {/* 模板管理模态框 */}
