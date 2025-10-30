@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>重复任务调试工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4F46E5;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9fafb;
+            border-left: 4px solid #4F46E5;
+        }
+        .task-item {
+            background: white;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+        }
+        .recurring {
+            background: #dbeafe;
+            border-color: #3b82f6;
+        }
+        .no-template {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+        button {
+            background: #4F46E5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #4338CA;
+        }
+        .warning {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 重复任务调试工具</h1>
+        
+        <div class="section">
+            <h2>📊 数据统计</h2>
+            <div id="stats"></div>
+        </div>
+
+        <div class="section">
+            <h2>📝 所有任务</h2>
+            <div id="tasks"></div>
+        </div>
+
+        <div class="section">
+            <h2>🛠️ 修复工具</h2>
+            <button onclick="fixMissingTemplateIds()">🔧 修复缺失的 templateId</button>
+            <button onclick="viewProcessedWeeks()">📅 查看已处理的周</button>
+            <button onclick="clearProcessedWeeks()">🗑️ 清除已处理记录</button>
+            <div id="fix-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>📦 原始数据</h2>
+            <button onclick="showRawData()">查看完整 localStorage 数据</button>
+            <pre id="raw-data" style="display:none;"></pre>
+        </div>
+    </div>
+
+    <script>
+        const DATA_KEY = 'weekly-planner-data-v1';
+        const PROCESSED_WEEKS_KEY = 'weekly-planner-processed-weeks';
+
+        function loadData() {
+            const raw = localStorage.getItem(DATA_KEY);
+            return raw ? JSON.parse(raw) : {};
+        }
+
+        function saveData(data) {
+            localStorage.setItem(DATA_KEY, JSON.stringify(data));
+        }
+
+        function analyzeData() {
+            const data = loadData();
+            let totalTasks = 0;
+            let recurringTasks = 0;
+            let tasksWithTemplate = 0;
+            let recurringWithoutTemplate = 0;
+            const allTasks = [];
+
+            Object.entries(data).forEach(([weekKey, weekData]) => {
+                weekData.days.forEach(day => {
+                    day.tasks.forEach(task => {
+                        totalTasks++;
+                        allTasks.push({ ...task, weekKey, dateISO: day.dateISO });
+                        
+                        if (task.isRecurring) {
+                            recurringTasks++;
+                            if (!task.templateId) {
+                                recurringWithoutTemplate++;
+                            }
+                        }
+                        
+                        if (task.templateId) {
+                            tasksWithTemplate++;
+                        }
+                    });
+                });
+            });
+
+            return {
+                totalTasks,
+                recurringTasks,
+                tasksWithTemplate,
+                recurringWithoutTemplate,
+                allTasks,
+                weekCount: Object.keys(data).length
+            };
+        }
+
+        function displayStats() {
+            const stats = analyzeData();
+            const statsDiv = document.getElementById('stats');
+            
+            let html = `
+                <p><strong>📊 总任务数：</strong>${stats.totalTasks}</p>
+                <p><strong>📅 数据周数：</strong>${stats.weekCount}</p>
+                <p><strong>🔄 重复任务：</strong>${stats.recurringTasks}</p>
+                <p><strong>🏷️ 有模板ID的任务：</strong>${stats.tasksWithTemplate}</p>
+            `;
+            
+            if (stats.recurringWithoutTemplate > 0) {
+                html += `<div class="warning">⚠️ 发现 ${stats.recurringWithoutTemplate} 个重复任务缺失 templateId！点击下方"修复"按钮。</div>`;
+            } else if (stats.recurringTasks > 0) {
+                html += `<div class="success">✅ 所有重复任务都有 templateId</div>`;
+            }
+            
+            statsDiv.innerHTML = html;
+        }
+
+        function displayTasks() {
+            const stats = analyzeData();
+            const tasksDiv = document.getElementById('tasks');
+            
+            let html = '';
+            stats.allTasks.forEach(task => {
+                const className = task.isRecurring ? 
+                    (task.templateId ? 'task-item recurring' : 'task-item no-template') : 
+                    'task-item';
+                
+                html += `
+                    <div class="${className}">
+                        <strong>${task.title}</strong><br>
+                        <small>
+                            📅 ${task.dateISO} | 
+                            🏷️ ${task.taskType || '计划'} | 
+                            ⏰ ${task.timeSlot} | 
+                            ${task.startTime ? `⏱️ ${task.startTime}` : ''}
+                        </small><br>
+                        <small>
+                            ${task.isRecurring ? '🔄 每周重复' : ''} 
+                            ${task.templateId ? `| 模板: ${task.templateId.slice(0, 8)}...` : '❌ 无模板ID'}
+                        </small>
+                    </div>
+                `;
+            });
+            
+            tasksDiv.innerHTML = html || '<p>暂无任务</p>';
+        }
+
+        function fixMissingTemplateIds() {
+            const data = loadData();
+            let fixed = 0;
+            
+            Object.keys(data).forEach(weekKey => {
+                data[weekKey].days.forEach(day => {
+                    day.tasks = day.tasks.map(task => {
+                        if (task.isRecurring && !task.templateId) {
+                            fixed++;
+                            return { ...task, templateId: task.id };
+                        }
+                        return task;
+                    });
+                });
+            });
+            
+            saveData(data);
+            
+            const resultDiv = document.getElementById('fix-result');
+            resultDiv.innerHTML = `<div class="success">✅ 已修复 ${fixed} 个任务的 templateId</div>`;
+            
+            displayStats();
+            displayTasks();
+        }
+
+        function viewProcessedWeeks() {
+            const raw = localStorage.getItem(PROCESSED_WEEKS_KEY);
+            const weeks = raw ? JSON.parse(raw) : [];
+            
+            const resultDiv = document.getElementById('fix-result');
+            resultDiv.innerHTML = `
+                <div class="success">
+                    <strong>已处理的周：</strong><br>
+                    ${weeks.length > 0 ? weeks.join('<br>') : '无'}
+                </div>
+            `;
+        }
+
+        function clearProcessedWeeks() {
+            if (confirm('确定要清除已处理记录吗？这将允许系统重新复制重复任务。')) {
+                localStorage.removeItem(PROCESSED_WEEKS_KEY);
+                const resultDiv = document.getElementById('fix-result');
+                resultDiv.innerHTML = `<div class="success">✅ 已清除已处理记录</div>`;
+            }
+        }
+
+        function showRawData() {
+            const rawDataPre = document.getElementById('raw-data');
+            if (rawDataPre.style.display === 'none') {
+                const data = {
+                    weekData: loadData(),
+                    processedWeeks: localStorage.getItem(PROCESSED_WEEKS_KEY),
+                    templates: localStorage.getItem('weekly-planner-templates-v1'),
+                    unassignedTasks: localStorage.getItem('weekly-planner-unassigned-tasks')
+                };
+                rawDataPre.textContent = JSON.stringify(data, null, 2);
+                rawDataPre.style.display = 'block';
+            } else {
+                rawDataPre.style.display = 'none';
+            }
+        }
+
+        // 初始化显示
+        displayStats();
+        displayTasks();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalStorage 检查工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background: #4F46E5;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #4338CA;
+        }
+        .danger {
+            background: #DC2626;
+        }
+        .danger:hover {
+            background: #B91C1C;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .info {
+            background: #EFF6FF;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>📦 LocalStorage 检查工具</h1>
+    
+    <div class="info">
+        <strong>说明：</strong>这个工具可以帮助你检查和修复计划应用的数据存储问题。
+    </div>
+    
+    <div>
+        <button onclick="checkData()">🔍 检查当前数据</button>
+        <button onclick="migrateData()">🔄 迁移旧数据</button>
+        <button class="danger" onclick="clearAll()">🗑️ 清空所有数据</button>
+    </div>
+    
+    <h2>检查结果：</h2>
+    <pre id="result">点击"检查当前数据"查看...</pre>
+    
+    <script>
+        function checkData() {
+            const result = document.getElementById('result');
+            let output = '=== LocalStorage 当前数据 ===\n\n';
+            
+            // 检查所有相关的键
+            const keys = [
+                'weekly-planner-data-v1',
+                'weekly-planner-templates-v1',
+                'weekly-planner-templates',  // 旧键名
+                'weekly-planner-data'         // 旧键名
+            ];
+            
+            keys.forEach(key => {
+                const data = localStorage.getItem(key);
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        output += `📌 键名: ${key}\n`;
+                        if (Array.isArray(parsed)) {
+                            output += `   类型: 数组 (${parsed.length} 项)\n`;
+                            output += `   内容预览: ${JSON.stringify(parsed, null, 2)}\n\n`;
+                        } else if (typeof parsed === 'object') {
+                            output += `   类型: 对象 (${Object.keys(parsed).length} 个键)\n`;
+                            output += `   键列表: ${Object.keys(parsed).join(', ')}\n\n`;
+                        }
+                    } catch (e) {
+                        output += `📌 键名: ${key}\n`;
+                        output += `   错误: 无法解析 JSON\n\n`;
+                    }
+                } else {
+                    output += `📌 键名: ${key}\n`;
+                    output += `   状态: 不存在\n\n`;
+                }
+            });
+            
+            output += '\n=== 所有 LocalStorage 键 ===\n';
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.includes('planner')) {
+                    output += `- ${key}\n`;
+                }
+            }
+            
+            result.textContent = output;
+        }
+        
+        function migrateData() {
+            const oldTemplatesKey = 'weekly-planner-templates';
+            const newTemplatesKey = 'weekly-planner-templates-v1';
+            
+            const oldData = localStorage.getItem(oldTemplatesKey);
+            if (oldData) {
+                localStorage.setItem(newTemplatesKey, oldData);
+                localStorage.removeItem(oldTemplatesKey);
+                alert('✅ 已成功迁移旧模板数据！');
+                checkData();
+            } else {
+                alert('ℹ️ 没有找到需要迁移的旧数据');
+            }
+        }
+        
+        function clearAll() {
+            if (confirm('⚠️ 确定要清空所有数据吗？此操作不可恢复！')) {
+                const keys = [
+                    'weekly-planner-data-v1',
+                    'weekly-planner-templates-v1',
+                    'weekly-planner-templates',
+                    'weekly-planner-data'
+                ];
+                keys.forEach(key => localStorage.removeItem(key));
+                alert('✅ 已清空所有数据');
+                checkData();
+            }
+        }
+        
+        // 页面加载时自动检查
+        window.onload = checkData;
+    </script>
+</body>
+</html>
+
