@@ -149,18 +149,27 @@ export default function MobileDayView({
       {editingTask && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
-            <TaskEditor
-              task={editingTask.task}
-              onSave={(updatedTask) => {
-                onUpdateTask(editingTask.dateISO, updatedTask)
-                setEditingTask(null)
-              }}
-              onDelete={() => {
-                onDeleteTask(editingTask.dateISO, editingTask.task.id)
-                setEditingTask(null)
-              }}
-              onCancel={() => setEditingTask(null)}
-            />
+            <div className="p-4">
+              <TaskEditor
+                initial={editingTask.task}
+                onSave={(updatedTask) => {
+                  onUpdateTask(editingTask.dateISO, updatedTask)
+                  setEditingTask(null)
+                }}
+                onCancel={() => setEditingTask(null)}
+              />
+              <button
+                onClick={() => {
+                  if (window.confirm('确定要删除这个任务吗？')) {
+                    onDeleteTask(editingTask.dateISO, editingTask.task.id)
+                    setEditingTask(null)
+                  }
+                }}
+                className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                删除任务
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -170,7 +179,7 @@ export default function MobileDayView({
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
             <TaskEditor
-              task={{
+              initial={{
                 id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                 title: '',
                 priority: 'medium',
