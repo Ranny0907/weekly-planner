@@ -69,7 +69,7 @@ export default function TimelineView({
         </div>
         <div className="relative">
           {timeSlots.map((slot, index) => {
-            const isSegmentStart = index === 0 || slot.segment !== timeSlots[index - 1].segment
+            const isSegmentStart = index === 0 || slot.segment !== timeSlots[index - 1]?.segment
             return (
               <div 
                 key={`${slot.time}-${index}`}
